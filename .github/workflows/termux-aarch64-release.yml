@@ -40,6 +40,14 @@ jobs:
           toolchain: stable
           targets: aarch64-linux-android
 
+      - name: Configure NDK linker paths
+        run: |
+          NDK="$HOME/ndk/android-ndk-r27d"
+          SYSROOT="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+          echo "ANDROID_SYSROOT=$SYSROOT" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$SYSROOT/bin/aarch64-linux-android21-clang" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=-Clink-arg=-L$SYSROOT/lib/aarch64-linux-android/21 -Clink-arg=-llog -Clink-arg=-lunwind" >> "$GITHUB_ENV"
+
       - name: Build selenium-manager for Termux aarch64
         id: build
         working-directory: rust
