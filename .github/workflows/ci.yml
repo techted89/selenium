@@ -26,8 +26,17 @@ jobs:
     if: (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/trunk'
     uses: ./.github/workflows/ci-build-index.yml
 
+  setup-java:
+    name: Set up Java
+    uses: actions/setup-java@v3
+    with:
+      distribution: 'temurin'
+      java-version: '11'
+      architecture: 'x64'
+
   lint:
     name: Lint
+    needs: setup-java
     uses: ./.github/workflows/bazel.yml
     with:
       name: Check Workflows and Shell
