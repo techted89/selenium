@@ -76,6 +76,14 @@ jobs:
           name: selenium-manager-aarch64-linux-android
           path: build/core/
 
+      - name: Set up Java
+        if: matrix.language == 'java'
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          architecture: 'x64'
+
       - name: Set up Python
         if: matrix.language == 'python'
         uses: actions/setup-python@v5
