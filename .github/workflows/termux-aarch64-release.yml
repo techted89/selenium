@@ -1,0 +1,213 @@
+name: Termux Aarch64 Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g., selenium-manager-android-aarch64-v1.0.0)"
+        required: true
+        default: ""
+        type: string
+    secrets:
+      SELENIUM_CI_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-core-binary:
+    name: Build selenium-manager for Android aarch64 (Termux)
+    runs-on: ubuntu-latest
+    outputs:
+      binary-path: ${{ steps.build.outputs.binary-path }}
+      arch: aarch64-linux-android
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Android NDK r28c
+        run: |
+          mkdir -p $HOME/ndk
+          curl -sSL https://dl.google.com/android/repository/android-ndk-r28c-linux-x86_64.zip -o ndk.zip
+          unzip -q ndk.zip -d $HOME/ndk
+          echo "ANDROID_NDK_HOME=$HOME/ndk/android-ndk-r28c" >> $GITHUB_ENV
+          echo "$HOME/ndk/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+      - name: Install Rust toolchain with aarch64-linux-android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android
+
+      - name: Build selenium-manager for Termux aarch64
+        id: build
+        working-directory: rust
+        run: |
+          cargo build --target aarch64-linux-android --release
+          BINARY_PATH="target/aarch64-linux-android/release/selenium-manager"
+          echo "binary-path=$BINARY_PATH" >> $GITHUB_OUTPUT
+          ls -la "$BINARY_PATH"
+          file "$BINARY_PATH"
+
+      - name: Upload core binary artifact
+        uses: actions/upload-artifact@v8
+        with:
+          name: selenium-manager-aarch64-linux-android
+          path: rust/target/aarch64-linux-android/release/selenium-manager
+          retention-days: 30
+
+  build-language-bindings:
+    name: Build language bindings for aarch64-linux-android
+    needs: build-core-binary
+    runs-on: ubuntu-latest
+    if: always()
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java, python, javascript]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download core binary
+        uses: actions/download-artifact@v8
+        with:
+          name: selenium-manager-aarch64-linux-android
+          path: build/core/
+
+      - name: Set up Python
+        if: matrix.language == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JavaScript
+        if: matrix.language == 'javascript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Java bindings for aarch64
+        if: matrix.language == 'java'
+        working-directory: java
+        run: |
+          mvn package -Pandroid-aarch64 || mvn package
+
+      - name: Build Python bindings for aarch64
+        if: matrix.language == 'python'
+        working-directory: py
+        run: |
+          pip install maturin
+          maturin build --target aarch64-linux-android --release
+          ls -la py/target/wheels/
+
+      - name: Build JavaScript bindings for aarch64
+        if: matrix.language == 'javascript'
+        working-directory: javascript
+        run: |
+          npm ci
+          npm run build:aarch64-android || npm run build
+
+      - name: Upload ${{ matrix.language }} binding artifact
+        if: matrix.language == 'java'
+        uses: actions/upload-artifact@v8
+        with:
+          name: selenium-java-aarch64-linux-android
+          path: java/target/*.jar
+          retention-days: 30
+
+      - name: Upload Python wheel artifact
+        if: matrix.language == 'python'
+        uses: actions/upload-artifact@v8
+        with:
+          name: selenium-python-aarch64-linux-android
+          path: py/target/wheels/*.whl
+          retention-days: 30
+
+      - name: Upload JavaScript artifact
+        if: matrix.language == 'javascript'
+        uses: actions/upload-artifact@v8
+        with:
+          name: selenium-javascript-aarch64-linux-android
+          path: javascript/dist/
+          retention-days: 30
+
+  create-release:
+    name: Create Termux Aarch64 Release
+    needs: [build-core-binary, build-language-bindings]
+    if: ${{ needs.build-core-binary.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download core binary artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: selenium-manager-aarch64-linux-android
+          path: build/core/
+
+      - name: Download language binding artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: build/languages/
+          pattern: selenium-*-aarch64-linux-android
+          continue-on-error: true
+
+      - name: Create release directory structure
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="selenium-manager-android-aarch64-${{ github.run_id }}"
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          mkdir -p release/$TAG
+
+          cp build/core/selenium-manager release/$TAG/
+          chmod +x release/$TAG/selenium-manager
+
+          if [ -d "build/languages" ]; then
+            cp -r build/languages/* release/$TAG/
+          fi
+
+          echo "=== Release contents ==="
+          find release/$TAG/ -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.SELENIUM_CI_TOKEN }}
+          repository: ${{ github.repository }}
+          tag_name: ${{ env.TAG }}
+          name: Selenium Manager + Bindings - Termux aarch64 (Android)
+          draft: false
+          prerelease: false
+          files: |
+            release/${{ env.TAG }}/selenium-manager
+            release/${{ env.TAG }}/*-aarch64*
+          body: |
+            ## Selenium for Android Termux aarch64
+
+            **Architecture:** aarch64-linux-android
+            **Platform:** Android Termux
+            **Generated by:** GitHub Actions workflow ${{ github.workflow }} (run #${{ github.run_id }})
+
+            ### Included artifacts:
+            - selenium-manager: Cross-compiled Rust binary for Android aarch64
+            - Language bindings: Java, Python, JavaScript packages compatible with aarch64-linux-android target
+
+            ### Usage on Termux:
+            ```bash
+            chmod +x selenium-manager
+            ./selenium-manager --version
+            ```
+
+            This release enables complete Selenium automation on Android Termux with aarch64 architecture.
+
+      - name: Release Summary
+        run: |
+          echo "Release tag: ${{ env.TAG }}"
+          echo "Binary path: ${{ needs.build-core-binary.outputs.binary-path }}"
+          echo "Architecture: ${{ needs.build-core-binary.outputs.arch }}"
+          echo "All Selenium parts for Termux aarch64 build completed successfully."
