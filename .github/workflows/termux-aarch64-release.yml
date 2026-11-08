@@ -28,11 +28,11 @@ jobs:
 
       - name: Install Android NDK r28c
         run: |
-          mkdir -p $HOME/ndk
+          mkdir -p "$HOME/ndk"
           curl -sSL https://dl.google.com/android/repository/android-ndk-r28c-linux-x86_64.zip -o ndk.zip
-          unzip -q ndk.zip -d $HOME/ndk
-          echo "ANDROID_NDK_HOME=$HOME/ndk/android-ndk-r28c" >> $GITHUB_ENV
-          echo "$HOME/ndk/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          unzip -q ndk.zip -d "$HOME/ndk"
+          echo "ANDROID_NDK_HOME=$HOME/ndk/android-ndk-r28c" >> "$GITHUB_ENV"
+          echo "$HOME/ndk/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_PATH"
 
       - name: Install Rust toolchain with aarch64-linux-android target
         uses: dtolnay/rust-toolchain@stable
@@ -46,7 +46,7 @@ jobs:
         run: |
           cargo build --target aarch64-linux-android --release
           BINARY_PATH="target/aarch64-linux-android/release/selenium-manager"
-          echo "binary-path=$BINARY_PATH" >> $GITHUB_OUTPUT
+          echo "binary-path=$BINARY_PATH" >> "$GITHUB_OUTPUT"
           ls -la "$BINARY_PATH"
           file "$BINARY_PATH"
 
@@ -138,6 +138,7 @@ jobs:
     needs: [build-core-binary, build-language-bindings]
     if: ${{ needs.build-core-binary.result == 'success' }}
     runs-on: ubuntu-latest
+    continue-on-error: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -161,18 +162,18 @@ jobs:
           if [ -z "$TAG" ]; then
             TAG="selenium-manager-android-aarch64-${{ github.run_id }}"
           fi
-          echo "TAG=$TAG" >> $GITHUB_ENV
-          mkdir -p release/$TAG
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p "release/$TAG"
 
-          cp build/core/selenium-manager release/$TAG/
-          chmod +x release/$TAG/selenium-manager
+          cp build/core/selenium-manager "release/$TAG/"
+          chmod +x "release/$TAG/selenium-manager"
 
           if [ -d "build/languages" ]; then
-            cp -r build/languages/* release/$TAG/
+            cp -r build/languages/* "release/$TAG/"
           fi
 
           echo "=== Release contents ==="
-          find release/$TAG/ -type f | sort
+          find "release/$TAG/" -type f | sort
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
