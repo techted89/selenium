@@ -31,6 +31,7 @@ jobs:
     uses: ./.github/workflows/bazel.yml
     with:
       name: Check Workflows and Shell
+      java-version: '11'
       run: ./go lint_workflows && ./go lint_shell
 
   format:

@@ -46,6 +46,11 @@ on:
         required: false
         type: string
         default: ''
+      java-version:
+        description: Custom Java version to use
+        required: false
+        type: string
+        default: ''
       download-artifact-name:
         description: Name of an artifact to download into the workspace before running
         required: false
@@ -174,6 +179,15 @@ jobs:
       - name: Set Ruby version
         if: inputs.ruby-version != ''
         run: echo '${{ inputs.ruby-version }}' > rb/.ruby-version
+      - name: Set Java version
+        if: inputs.java-version != ''
+        run: |
+          mkdir -p /usr/lib/jvm
+          curl -sSL "https://github.com/adoptium/temurin-builds/releases/download/jdk-11.0.23%2B1/OpenJDK11U-jre_x64_linux_hotspot_11.0.23_1.tar.gz" -o /tmp/jdk.tar.gz
+          tar -xzf /tmp/jdk.tar.gz -C /usr/lib/jvm/
+          export JAVA_HOME=/usr/lib/jvm/jdk-11.0.23+1-jre
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME/bin" >> "$GITHUB_PATH"
       - name: Set Node version
         if: inputs.node-version != ''
         run: echo '${{ inputs.node-version }}' > .nvmrc
